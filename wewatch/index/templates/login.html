@@ -1,15 +1,15 @@
 <!DOCTYPE html>
+{% load static %}
+
 <html>
 <head>
     <title>欢迎光临</title>
+    <script src="{% static "/js/jquery-3.1.1.min.js" %}"></script>  
 </head>
 <body>
 	<img src= {{url}} />
-    <script>
-        var url = 'xxx' + {{uuid}};
-        url += ''
-        url += getTime()
-
+    <script type="text/javascript">
+        $.post("login", { uuid: {{url}} });
     </script>
 </body>
 </html> 
