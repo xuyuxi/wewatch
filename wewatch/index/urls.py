@@ -10,4 +10,5 @@ from index import views
 
 urlpatterns = [
     url(r'^$', views.login,name = 'login'),
+    url(r'^check$', views.check_login,name = 'check_login'),
     ]
