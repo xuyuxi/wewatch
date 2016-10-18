@@ -25,6 +25,20 @@ def login(request):
                 return HttpResponseRedirect('user')
 
 def check_login(request):
-    pass
+    if request.method == 'GET':
+        while 1:
+            status = WcSession.check_login()
+            if status == '200':
+                #log in
+                return HttpResponseRedirect('user')
+            elif status == '201':
+                # need comfirm at mobile
+                return HttpResponse({'status':'Please press confirm on your mobilephone'})
+            elif status == '408':
+                WcSession.refresh_uuid()
+                return HttpResponseRedirect('')
+            else:
+                WcSession.refresh_uuid()
+                return HttpResponseRedirect('')
 
 

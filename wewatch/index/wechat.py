@@ -1,3 +1,4 @@
+#coding=utf-8
 import requests
 import ssl
 import re
@@ -28,9 +29,9 @@ class wechatSession(object):
         self.myRequests = requests.Session()
         #before login
         self.uuid = ''
-        self.flag = 0 # 标示uuid是否可用，1可用，2不可用
         self.deviceId = 'e000000000000000'
         #fetch after login
+        self.loginInfo = {}
         self.base_uri = ''
         self.redirect_uri = ''
         self.skey = ''
@@ -42,11 +43,11 @@ class wechatSession(object):
         self.My = []
         self.SyncKey = []
 
-        
         if hasattr(ssl, '_create_unverified_context'): 
             ssl._create_default_https_context = ssl._create_unverified_context
         headers = {'User-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/44.0.2403.125 Safari/537.36'}
         self.myRequests.headers.update(headers)
+
     def _get_uuid(self,):
         
         url = 'https://login.weixin.qq.com/jslogin'
@@ -67,62 +68,42 @@ class wechatSession(object):
         code = pm.group(1)
         self.uuid = pm.group(2)
         if code == '200':
-            self.flag = 1
             return True
-    
         return False
-    def _check_QRImag_Validation(self,):
-        
-        if self.flag == 0:
-            print('flag0')
-            self._get_uuid()
-            print('getuuid')
+
+    def check_login(self,):
         while True:
-            url = 'https://login.weixin.qq.com/cgi-bin/mmwebwx-bin/login?tip=1&uuid=%s&_=%s' % (
-            self.uuid, int(time.time()))
-            r = self.myRequests.get(url=url)
-            r.encoding = 'utf-8'
-            data = r.text
-
-            # print(data)
-
+            import pdb; pdb.set_trace()
+            url = 'https://login.weixin.qq.com/cgi-bin/mmwebwx-bin/login'
+            payloads = 'tip=1&uuid=%s&_=%s'%(self.uuid, int(time.time()))
+            
+            r = self.myRequests.get(url=url, params = payloads)
             # window.code=500;
             regx = r'window.code=(\d+);'
-            pm = re.search(regx, data)
-
-            code = pm.group(1)
-            if code == '200':
-                time.sleep( 1 )
-            elif code == '200':  # 已登录
+            data = re.search(regx, r.text)
+            if data and data.group(1) == '200':  # 已登录
                 self.flag = 0
                 regx = r'window.redirect_uri="(\S+?)";'
-                pm = re.search(regx, data)
-                self.redirect_uri = pm.group(1) + '&fun=new'
-                self.base_uri = self.redirect_uri[:self.redirect_uri.rfind('/')]
-                # push_uri与base_uri对应关系(排名分先后)(就是这么奇葩..)
-                services = [
-                    ('wx2.qq.com', 'webpush2.weixin.qq.com'),
-                    ('qq.com', 'webpush.weixin.qq.com'),
-                    ('web1.wechat.com', 'webpush1.wechat.com'),
-                    ('web2.wechat.com', 'webpush2.wechat.com'),
-                    ('wechat.com', 'webpush.wechat.com'),
-                    ('web1.wechatapp.com', 'webpush1.wechatapp.com'),
-                ]
-                self.push_uri = base_uri
-                for (searchUrl, pushUrl) in services:
-                    if self.base_uri.find(searchUrl) >= 0:
-                        self.push_uri = 'https://%s/cgi-bin/mmwebwx-bin' % pushUrl
-                        break
-                return True
-            elif code == '408':  # 超时
-                self.flag = 0
-                return False
-            elif code == '400' or code == '500':
-                self.flag = 0
-                return False
+                self.loginInfo['url'] = re.search(regx, r.text).group(1)
+                r = self.myRequests.get(self.loginInfo['url'], allow_redirects=False)
+                self.loginInfo['url'] = self.loginInfo['url'][:self.loginInfo['url'].rfind('/')]
+                self.loginInfo['BaseRequest'] = {}
+                for node in xml.dom.minidom.parseString(r.text).documentElement.childNodes:
+                    if node.nodeName == 'skey':
+                        self.loginInfo['skey'] = self.loginInfo['BaseRequest']['Skey'] = node.childNodes[0].data
+                    elif node.nodeName == 'wxsid':
+                        self.loginInfo['wxsid'] = self.loginInfo['BaseRequest']['Sid'] = node.childNodes[0].data
+                    elif node.nodeName == 'wxuin':
+                        self.loginInfo['wxuin'] = self.loginInfo['BaseRequest']['Uin'] = node.childNodes[0].data
+                    elif node.nodeName == 'pass_ticket':
+                        self.loginInfo['pass_ticket'] = self.loginInfo['BaseRequest']['DeviceID'] = node.childNodes[0].data
+                return '200'
+            elif data and data.group(1) == '201':
+                return '201'
+            elif data and data.group(1) == '408':
+                return '408'
             else:
-                self.flag = 0
-                return False
+                return '0'
     def _heartBeatLoop(self,):
         while True:
             selector = self._syncCheck()
@@ -251,13 +232,17 @@ class wechatSession(object):
 
 
     def get_QRImage_url(self,):
-        if self.flag == 0:
+        if self.uuid == '':
             self._get_uuid()
         return  'https://login.weixin.qq.com/qrcode/' + self.uuid
+
     def get_uuid(self,):
-        if self.flag == 0:
+        if self.uuid == '':
             self._get_uuid()
         return  self.uuid
+    def refresh_uuid(self,):
+        self._get_uuid()
+
     def get_contact(self,):
 
         url = (self.base_uri + 
@@ -297,5 +282,15 @@ class wechatSession(object):
         return MemberList
     def get_uid(self,):
         return self.wxuin
+    def check_status(self,):
+        '''
+        status = 2 : has logged in
+        status = 1 : QR image to been scan
+        status = 0 : QR image have been scanned, but not logged in
+        '''
+        if self.check_login():
+            return {'status':1}
+        else:
+            return {'status':0}
 
 
