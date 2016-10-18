@@ -36,9 +36,11 @@
                 }
             }
         });
-
-        $(document).ready(function () {
+        function checklogin() {
             $.post("", { state: true });
+        }
+        $(document).ready(function () {
+            setInterval("checklogin()", "1000");
             } )
     </script>
 </body>
